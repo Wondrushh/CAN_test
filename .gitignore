@@ -140,3 +140,4 @@ fabric.properties
 .project
 .metadata/
 RemoteSystemsTempFiles/
+/Debug/

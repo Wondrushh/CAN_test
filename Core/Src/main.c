@@ -57,9 +57,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void _CANext_func_callback(uint8_t aPayload[], uint32_t IDmsg){
-  __NOP();
-}
 
 /* USER CODE END 0 */
 
@@ -96,69 +93,46 @@ int main(void)
   MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
   CANbus_Init(&hcan1);
-  CANbus_ExtendedFilterInit();
     CANbus_FilterInit();
      if (HAL_CAN_Start(&hcan1) != HAL_OK){
        Error_Handler(); /* Start Error */
      }
-     uint8_t dang[] = {18,0,0};
-
+// SET_BIT(CAN1->MCR, CAN_MCR_ABOM); /*Set the Automatic buss-off management*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	/*Prehrat knigovnu na novou verzi!!!!!!!!!!!!!!!!!!!!!!!!
-	 *
-	 *
-	 *
-	 *
-	 *
-	 *
-	 *
-	 * */
-//	  static uint16_t button_status = 0;
-//	  button_status = HAL_GPIO_ReadPin(board_button_GPIO_Port, board_button_Pin);
-	  uint8_t data[] = {1};
-//	  CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), data);
-	  HAL_ADC_Start(&hadc3);
-	  uint16_t conversion_done = 1;
-	  while(conversion_done)
+
+	  static uint16_t button_status = 0;
+	  button_status = HAL_GPIO_ReadPin(board_button_GPIO_Port, board_button_Pin);
+
+	  if (!button_status)
 	  {
-		  conversion_done = HAL_ADC_PollForConversion(&hadc3, 10);
+		  uint8_t data[] = {1};
+		  CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), data);
+		  uint32_t last_time = 0;
+		  while(1)
+		  {
+			  uint16_t delay = 100;
+			  if(HAL_GetTick() >= last_time + delay)
+			  {
+				  HAL_ADC_Start(&hadc3);
+				  uint16_t conversion_done = 1;
+				  while(conversion_done) /*checks till the conversion is done*/
+				  {
+					  conversion_done = HAL_ADC_PollForConversion(&hadc3, 10);
+				  }
+				  uint8_t adc_value = HAL_ADC_GetValue(&hadc3);
+				  HAL_ADC_Stop(&hadc3);
+				  uint8_t pedal_pos_data[] = {adc_value, 0, 0};
+				  last_time = HAL_GetTick();
+				  CAN1bus_SendData(CANcrit_ID_Pedal_position, 3, (CAN_RTR_DATA | CANdef_ALLMSG), pedal_pos_data);
+			  }
+
+		  }
 	  }
-	  uint8_t adc_value = HAL_ADC_GetValue(&hadc3);
-	  HAL_ADC_Stop(&hadc3);
-	  uint8_t pedal_pos_data[] = {adc_value, 0, 0};
-	  CAN1bus_SendData(CANcrit_ID_Pedal_position, 1, (CAN_RTR_DATA | CANdef_ALLMSG), pedal_pos_data);
-	  HAL_Delay(100);
-//	  if (!button_status)
-//	  {
-//		  uint8_t data[] = {1};
-//		  CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), data);
-//		  uint32_t last_time = 0;
-//		  while(1)
-//		  {
-//			  uint16_t delay = 100;
-//			  if(HAL_GetTick() >= last_time + delay)
-//			  {
-//				  HAL_ADC_Start(&hadc3);
-//				  uint16_t conversion_done = 1;
-//				  while(conversion_done)
-//				  {
-//					  conversion_done = HAL_ADC_PollForConversion(&hadc3, 10);
-//				  }
-//				  uint8_t adc_value = HAL_ADC_GetValue(&hadc3);
-//				  HAL_ADC_Stop(&hadc3);
-//				  uint8_t pedal_pos_data[] = {adc_value, 0, 0};
-//				  last_time = HAL_GetTick();
-//				  CAN1bus_SendData(CANcrit_ID_Pedal_position, 1, (CAN_RTR_DATA | CANdef_ALLMSG), dang);
-//			  	  __NOP();
-//			  }
-//
-//		  }
-//	  }
 
     /* USER CODE END WHILE */
 
