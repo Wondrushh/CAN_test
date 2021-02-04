@@ -19,7 +19,7 @@ extern "C"
 
 //#define __AMS_SLAVE__
 //#define __AMS_MASTER__
-
+//test
 #include <stdint.h>
 #include "Dragon_CANbus.h"
 
@@ -248,7 +248,6 @@ typedef enum {
 	CANgen_ID_ESP_log_esp_trq = 2038u,
 	CANgen_ID_ESP_log_tcs_trq = 2039u,
 	CANgen_ID_Pedal_Calibration = 2040u,
-//	CANgen_ID_Battery_fan_percent = 2041u
 } CANdef_CANgen_ID;
 
 
