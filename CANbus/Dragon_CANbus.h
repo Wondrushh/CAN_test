@@ -94,7 +94,7 @@ void CANgen_func_temperature(uint8_t aPayload[])         //test callback functio
 *  ONLY_INTERRUPT_MODE = When receive msg to FIFO0 -> call interrupt.
 *  SEMI_INTERRUPT_MODE = For receive msg from FIFO0 must use pool method
 */
-//#define _CAN1def_ONLY_INTERRUPT_MODE
+#define _CAN1def_ONLY_INTERRUPT_MODE
 //#define _CAN2def_ONLY_INTERRUPT_MODE
 
 
@@ -105,6 +105,7 @@ void CANgen_func_temperature(uint8_t aPayload[])         //test callback functio
 */
 
 //#define _CANgen_USED_TEMPERATURE   /*example*/
+#define _CANcrit_USED_RESET
 
 /**
 * @brief Define callback func for CAN1
@@ -120,10 +121,10 @@ void CANgen_func_temperature(uint8_t aPayload[])         //test callback functio
 * @note For select -> uncomment
 */
 //#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_VCU_gen           //VCU - CAN_gen
-#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_VCU_crit          //VCU - CAN_crit
+//#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_VCU_crit          //VCU - CAN_crit
 //#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_ESP_crit          //ESP - CAN_crit
 //#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_ESP_inv           //ESP - CAN_inv
-//#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_PEDAL_crit        //PEDAL - CAN_crit
+#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_PEDAL_crit        //PEDAL - CAN_crit
 //#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_AMSM_gen          //AMSM - CAN_gen
 //#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_AMSM_ams          //AMSM - CAN_ams
 //#define __CAN1_FILTERLIST  _dragon_CANbus_filterList_AMSS_ams          //AMSS - CAN_ams

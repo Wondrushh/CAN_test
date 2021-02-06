@@ -52,7 +52,10 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void CANcrit_func_Reset(uint8_t aPayload[])
+{
+	HAL_NVIC_SystemReset();
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -97,13 +100,30 @@ int main(void)
      if (HAL_CAN_Start(&hcan1) != HAL_OK){
        Error_Handler(); /* Start Error */
      }
-// SET_BIT(CAN1->MCR, CAN_MCR_ABOM); /*Set the Automatic buss-off management*/
+ SET_BIT(CAN1->MCR, CAN_MCR_ABOM); /*Set the Automatic buss-off management*/
+ CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), 0);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+#ifndef _CAN1def_ONLY_INTERRUPT_MODE
+    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 0){
+        //if message pending in Fifo
+      CAN1bus_ReadProcessFIFO0();  //read data
+    }
+#endif //_CAN1def_ONLY_INTERRUPT_MODE
+#ifdef _DUAL_CAN_ACTIVATE
+#ifndef _CAN2def_ONLY_INTERRUPT_MODE
+    if (HAL_CAN_GetRxFifoFillLevel(&hcan3, CAN_RX_FIFO0) != 0){
+        //if message pending in Fifo
+      CAN2bus_ReadProcessFIFO0();  //read data
+    }
+#endif //_CAN2def_ONLY_INTERRUPT_MODE
+#endif  //_DUAL_CAN_ACTIVATE
+
 
 	  static uint16_t button_status = 0;
 	  button_status = HAL_GPIO_ReadPin(board_button_GPIO_Port, board_button_Pin);
@@ -115,6 +135,21 @@ int main(void)
 		  uint32_t last_time = 0;
 		  while(1)
 		  {
+#ifndef _CAN1def_ONLY_INTERRUPT_MODE
+    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 0){
+        //if message pending in Fifo
+      CAN1bus_ReadProcessFIFO0();  //read data
+    }
+#endif //_CAN1def_ONLY_INTERRUPT_MODE
+#ifdef _DUAL_CAN_ACTIVATE
+#ifndef _CAN2def_ONLY_INTERRUPT_MODE
+    if (HAL_CAN_GetRxFifoFillLevel(&hcan3, CAN_RX_FIFO0) != 0){
+        //if message pending in Fifo
+      CAN2bus_ReadProcessFIFO0();  //read data
+    }
+#endif //_CAN2def_ONLY_INTERRUPT_MODE
+#endif  //_DUAL_CAN_ACTIVATE
+
 			  uint16_t delay = 100;
 			  if(HAL_GetTick() >= last_time + delay)
 			  {
