@@ -60,6 +60,12 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define board_button_Pin GPIO_PIN_13
 #define board_button_GPIO_Port GPIOC
+#define RTC_CALIB_Pin GPIO_PIN_2
+#define RTC_CALIB_GPIO_Port GPIOB
+#define HVON_BUTTON_Pin GPIO_PIN_8
+#define HVON_BUTTON_GPIO_Port GPIOC
+#define RTD_BUTTON_Pin GPIO_PIN_9
+#define RTD_BUTTON_GPIO_Port GPIOC
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */

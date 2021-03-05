@@ -21,6 +21,8 @@
 #include "main.h"
 #include "adc.h"
 #include "can.h"
+#include "rtc.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -36,6 +38,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define hTimer htim3
+#define TIM TIM3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,16 +50,40 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+static volatile uint16_t g_HSI_counter;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+uint16_t get_HSI_counter() {return g_HSI_counter;}
+void reset_HSI_counter() {g_HSI_counter = 0;}
 void CANcrit_func_Reset(uint8_t aPayload[])
 {
 	HAL_NVIC_SystemReset();
 }
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+ {
+	if(htim == &htim3) //Timer interrupt for frequency measuring
+		{
+			g_HSI_counter++;
+		}
+ }
+
+uint8_t get_ADC_data(ADC_HandleTypeDef *hadc)
+{
+    HAL_ADC_Start(hadc);
+    uint16_t conversion_done = 1;
+    while(conversion_done) /*checks till the conversion is done*/
+    {
+        conversion_done = HAL_ADC_PollForConversion(hadc, 1);
+    }
+    HAL_ADC_Stop(hadc);
+    uint8_t adc_value = HAL_ADC_GetValue(hadc);
+    return adc_value;
+}
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -94,80 +122,93 @@ int main(void)
   MX_CAN1_Init();
   MX_USART2_UART_Init();
   MX_ADC3_Init();
+  MX_RTC_Init();
+  MX_TIM3_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   CANbus_Init(&hcan1);
     CANbus_FilterInit();
      if (HAL_CAN_Start(&hcan1) != HAL_OK){
        Error_Handler(); /* Start Error */
      }
- SET_BIT(CAN1->MCR, CAN_MCR_ABOM); /*Set the Automatic buss-off management*/
+// SET_BIT(CAN1->MCR, CAN_MCR_ABOM); /*Set the Automatic bus-off management*/
  CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), 0);
+ MODIFY_REG(RCC->ICSCR, RCC_ICSCR_HSITRIM, 17 << RCC_ICSCR_HSITRIM_Pos);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    #ifndef _CAN1def_ONLY_INTERRUPT_MODE
+        if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 0){
+            //if message pending in Fifo
+          CAN1bus_ReadProcessFIFO0();  //read data
+        }
+    #endif //_CAN1def_ONLY_INTERRUPT_MODE
+    #ifdef _DUAL_CAN_ACTIVATE
+    #ifndef _CAN2def_ONLY_INTERRUPT_MODE
+        if (HAL_CAN_GetRxFifoFillLevel(&hcan3, CAN_RX_FIFO0) != 0){
+            //if message pending in Fifo
+          CAN2bus_ReadProcessFIFO0();  //read data
+        }
+    #endif //_CAN2def_ONLY_INTERRUPT_MODE
+    #endif  //_DUAL_CAN_ACTIVATE
 
-#ifndef _CAN1def_ONLY_INTERRUPT_MODE
-    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 0){
-        //if message pending in Fifo
-      CAN1bus_ReadProcessFIFO0();  //read data
-    }
-#endif //_CAN1def_ONLY_INTERRUPT_MODE
-#ifdef _DUAL_CAN_ACTIVATE
-#ifndef _CAN2def_ONLY_INTERRUPT_MODE
-    if (HAL_CAN_GetRxFifoFillLevel(&hcan3, CAN_RX_FIFO0) != 0){
-        //if message pending in Fifo
-      CAN2bus_ReadProcessFIFO0();  //read data
-    }
-#endif //_CAN2def_ONLY_INTERRUPT_MODE
-#endif  //_DUAL_CAN_ACTIVATE
+      static uint8_t esp_on[] = {0};
+      static uint32_t last_time = 0;
+      static uint32_t last_time_start_button = 0;
+      uint16_t delay = 30;
+      uint16_t start_button_delay = 2000;
+      static uint8_t ts_on[] = {0};
+      static uint32_t hvon_last_time = 0;
+      static uint32_t rtd_last_time = 0;
 
+      if (!HAL_GPIO_ReadPin(RTD_BUTTON_GPIO_Port, RTD_BUTTON_Pin) && (HAL_GetTick() >= rtd_last_time + 200) && ts_on[0])
+      {
+          esp_on[0] = !esp_on[0];
+          CAN1bus_SendData(CANcrit_ID_Esp_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), esp_on);
+          rtd_last_time = HAL_GetTick();
+      }
 
-	  static uint16_t button_status = 0;
-	  button_status = HAL_GPIO_ReadPin(board_button_GPIO_Port, board_button_Pin);
+      if (!HAL_GPIO_ReadPin(HVON_BUTTON_GPIO_Port, HVON_BUTTON_Pin) && (HAL_GetTick() >= hvon_last_time + 200))
+      {
+          ts_on[0] = !ts_on[0];
+          hvon_last_time = HAL_GetTick();
+          if(!ts_on[0])
+          {
+              esp_on[0] = 0;
+          }
+      }
+      CAN1bus_SendData(CANcrit_ID_TS_on, 1, (CAN_RTR_DATA | CANdef_ALLMSG), ts_on);
+      CAN1bus_SendData(CANcrit_ID_Esp_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), esp_on);
 
-	  if (!button_status)
-	  {
-		  uint8_t data[] = {1};
-		  CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), data);
-		  uint32_t last_time = 0;
-		  while(1)
-		  {
-#ifndef _CAN1def_ONLY_INTERRUPT_MODE
-    if (HAL_CAN_GetRxFifoFillLevel(&hcan1, CAN_RX_FIFO0) != 0){
-        //if message pending in Fifo
-      CAN1bus_ReadProcessFIFO0();  //read data
-    }
-#endif //_CAN1def_ONLY_INTERRUPT_MODE
-#ifdef _DUAL_CAN_ACTIVATE
-#ifndef _CAN2def_ONLY_INTERRUPT_MODE
-    if (HAL_CAN_GetRxFifoFillLevel(&hcan3, CAN_RX_FIFO0) != 0){
-        //if message pending in Fifo
-      CAN2bus_ReadProcessFIFO0();  //read data
-    }
-#endif //_CAN2def_ONLY_INTERRUPT_MODE
-#endif  //_DUAL_CAN_ACTIVATE
+      if(HAL_GetTick() >= last_time + delay)
+      {
+          uint8_t brake_pos = get_ADC_data(&hadc1);
+          uint8_t throttle_pos = get_ADC_data(&hadc3);
+          uint8_t pedal_pos_data[] = {throttle_pos, brake_pos, 0};
+          uint8_t ams_status[] = {22, 33};
+          uint8_t max_cell_temp[] = {3};
+          uint8_t avg_cell_temp[] = {2};
+          uint8_t min_cell_temp[] = {1};
 
-			  uint16_t delay = 100;
-			  if(HAL_GetTick() >= last_time + delay)
-			  {
-				  HAL_ADC_Start(&hadc3);
-				  uint16_t conversion_done = 1;
-				  while(conversion_done) /*checks till the conversion is done*/
-				  {
-					  conversion_done = HAL_ADC_PollForConversion(&hadc3, 10);
-				  }
-				  uint8_t adc_value = HAL_ADC_GetValue(&hadc3);
-				  HAL_ADC_Stop(&hadc3);
-				  uint8_t pedal_pos_data[] = {adc_value, 0, 0};
-				  last_time = HAL_GetTick();
-				  CAN1bus_SendData(CANcrit_ID_Pedal_position, 3, (CAN_RTR_DATA | CANdef_ALLMSG), pedal_pos_data);
-			  }
+          CAN1bus_SendData(CANcrit_ID_Pedal_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), esp_on);
+          CAN1bus_SendData(CANcrit_ID_Pedal_position, 3, (CAN_RTR_DATA | CANdef_ALLMSG), pedal_pos_data);
+          CAN1bus_SendData(CANcrit_ID_Ams_status, 2, (CAN_RTR_DATA | CANdef_ALLMSG), ams_status);
+          CAN1bus_SendData(CANcrit_ID_TS_on, 1, (CAN_RTR_DATA | CANdef_ALLMSG), ts_on);
+          CAN1bus_SendData(CANcrit_ID_Max_cell_temp, 1, (CAN_RTR_DATA | CANdef_ALLMSG), max_cell_temp);
+          CAN1bus_SendData(CANcrit_ID_Avg_cell_temp, 1, (CAN_RTR_DATA | CANdef_ALLMSG), avg_cell_temp);
+          CAN1bus_SendData(CANcrit_ID_Min_cell_temp, 1, (CAN_RTR_DATA | CANdef_ALLMSG), min_cell_temp);
+          CAN1bus_SendData(CANcrit_ID_Esp_status, 1, (CAN_RTR_DATA | CANdef_ALLMSG), esp_on);
+          if (HAL_GetTick() >= last_time_start_button + start_button_delay)
+          {
+              CAN1bus_SendData(CANcrit_ID_Battery_fan_percent, 1, (CAN_RTR_DATA | CANdef_ALLMSG), min_cell_temp);
+              last_time_start_button = HAL_GetTick();
+          }
+          last_time = HAL_GetTick();
+      }
 
-		  }
-	  }
 
     /* USER CODE END WHILE */
 
@@ -189,7 +230,8 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_8;
@@ -211,9 +253,11 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_ADC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_ADC;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_MSI;
   PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
   PeriphClkInit.PLLSAI1.PLLSAI1N = 8;
